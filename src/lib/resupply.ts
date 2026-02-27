@@ -5,10 +5,13 @@
  */
 
 import { type PublicClient, formatUnits, parseUnits } from 'viem';
+import { createRequire } from 'node:module';
 import { getPublicClient } from './viem.js';
 import { ADDRESSES } from '../contracts/ADDRESSES.js';
-import RegistryABI from '../contracts/abis/ResupplyRegistry.json' assert { type: 'json' };
-import PairABI from '../contracts/abis/ResupplyPair.json' assert { type: 'json' };
+
+const require = createRequire(import.meta.url);
+const RegistryABI = require('../contracts/abis/ResupplyRegistry.json');
+const PairABI = require('../contracts/abis/ResupplyPair.json');
 
 export interface Market {
   name: string;

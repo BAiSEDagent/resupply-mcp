@@ -25,11 +25,9 @@
     "inputs": [],
     "name": "currentRateInfo",
     "outputs": [
-      {"name": "lastBlock", "type": "uint64"},
-      {"name": "feeToProtocolRate", "type": "uint64"},
       {"name": "lastTimestamp", "type": "uint64"},
       {"name": "ratePerSec", "type": "uint64"},
-      {"name": "fullUtilizationRate", "type": "uint64"}
+      {"name": "lastShares", "type": "uint128"}
     ],
     "stateMutability": "view",
     "type": "function"
