@@ -6,7 +6,7 @@
       {"name": "_borrowShares", "type": "uint256"},
       {"name": "_collateralBalance", "type": "uint256"}
     ],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
     "type": "function"
   },
   {

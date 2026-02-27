@@ -1,0 +1,37 @@
+[
+    {
+        "inputs": [],
+        "name": "registeredPairsLength",
+        "outputs": [{ "type": "uint256" }],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{ "type": "uint256" }],
+        "name": "registeredPairs",
+        "outputs": [{ "type": "address" }],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{ "type": "string" }],
+        "name": "pairsByName",
+        "outputs": [{ "type": "address" }],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getAllPairAddresses",
+        "outputs": [{ "type": "address[]" }],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "token",
+        "outputs": [{ "type": "address" }],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]

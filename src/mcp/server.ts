@@ -19,6 +19,13 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import dotenv from 'dotenv';
+import {
+  getMarkets as getMarketsLib,
+  getPosition as getPositionLib,
+  calculateBorrow as calculateBorrowLib,
+  simulateStrategy as simulateStrategyLib,
+  checkHealth as checkHealthLib,
+} from '../lib/resupply.js';
 
 dotenv.config();
 
@@ -42,8 +49,12 @@ const TOOLS = [
           type: 'string',
           description: 'User wallet address (0x...)',
         },
+        pairAddress: {
+          type: 'string',
+          description: 'Pair contract address (0x...)',
+        },
       },
-      required: ['address'],
+      required: ['address', 'pairAddress'],
     },
   },
   {
@@ -56,16 +67,12 @@ const TOOLS = [
           type: 'number',
           description: 'Collateral amount (in USDC)',
         },
-        market: {
-          type: 'string',
-          description: 'Market name (e.g., sDOLA, sUSDe)',
-        },
         targetLTV: {
           type: 'number',
           description: 'Target LTV ratio (0.5 = 50%, safe default)',
         },
       },
-      required: ['collateralAmount', 'market'],
+      required: ['collateralAmount'],
     },
   },
   {
@@ -78,20 +85,20 @@ const TOOLS = [
           type: 'number',
           description: 'Initial collateral (in USDC)',
         },
-        market: {
-          type: 'string',
-          description: 'Lending market',
-        },
         borrowAmount: {
           type: 'number',
           description: 'Amount to borrow (in reUSD)',
         },
-        reUSDDeployment: {
-          type: 'string',
-          description: 'Where to deploy reUSD (e.g., sfrxUSD, other)',
+        lendingAPY: {
+          type: 'number',
+          description: 'Lending APY (e.g., 8.0 for 8%)',
+        },
+        reUSDAPY: {
+          type: 'number',
+          description: 'reUSD deployment APY (e.g., 6.0 for 6%)',
         },
       },
-      required: ['collateralAmount', 'market', 'borrowAmount'],
+      required: ['collateralAmount', 'borrowAmount'],
     },
   },
   {
@@ -104,8 +111,12 @@ const TOOLS = [
           type: 'string',
           description: 'User wallet address',
         },
+        pairAddress: {
+          type: 'string',
+          description: 'Pair contract address',
+        },
       },
-      required: ['address'],
+      required: ['address', 'pairAddress'],
     },
   },
 ];
@@ -134,31 +145,53 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
+  if (!args) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'Error: Missing arguments',
+        },
+      ],
+    };
+  }
+
   try {
     switch (name) {
       case 'resupply_get_markets':
         return await getMarkets();
       
       case 'resupply_get_position':
-        return await getPosition(args.address);
+        if (typeof args.address !== 'string' || typeof args.pairAddress !== 'string') {
+          throw new Error('Invalid arguments: address and pairAddress must be strings');
+        }
+        return await getPosition(args.address, args.pairAddress);
       
       case 'resupply_calculate_borrow':
+        if (typeof args.collateralAmount !== 'number') {
+          throw new Error('Invalid arguments: collateralAmount must be a number');
+        }
         return await calculateBorrow(
           args.collateralAmount,
-          args.market,
-          args.targetLTV || 0.5
+          typeof args.targetLTV === 'number' ? args.targetLTV : 0.5
         );
       
       case 'resupply_simulate_strategy':
+        if (typeof args.collateralAmount !== 'number' || typeof args.borrowAmount !== 'number') {
+          throw new Error('Invalid arguments: collateralAmount and borrowAmount must be numbers');
+        }
         return await simulateStrategy(
           args.collateralAmount,
-          args.market,
           args.borrowAmount,
-          args.reUSDDeployment
+          typeof args.lendingAPY === 'number' ? args.lendingAPY : 8.0,
+          typeof args.reUSDAPY === 'number' ? args.reUSDAPY : 6.0
         );
       
       case 'resupply_check_health':
-        return await checkHealth(args.address);
+        if (typeof args.address !== 'string' || typeof args.pairAddress !== 'string') {
+          throw new Error('Invalid arguments: address and pairAddress must be strings');
+        }
+        return await checkHealth(args.address, args.pairAddress);
       
       default:
         throw new Error(`Unknown tool: ${name}`);
@@ -176,65 +209,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-// Tool implementations (placeholders for now)
+// Tool implementations
 async function getMarkets() {
-  // TODO: Query Resupply contracts for available markets
+  const markets = await getMarketsLib();
   return {
     content: [
       {
         type: 'text',
-        text: JSON.stringify({
-          markets: [
-            { name: 'sDOLA', lendingAPY: 8.5, borrowAPY: 4.25, available: true },
-            { name: 'sUSDe', lendingAPY: 12.3, borrowAPY: 6.15, available: true },
-            { name: 'sfrxUSD', lendingAPY: 6.8, borrowAPY: 3.4, available: true },
-            { name: 'WETH', lendingAPY: 3.2, borrowAPY: 2.0, available: true },
-          ],
-        }, null, 2),
+        text: JSON.stringify(markets, null, 2),
       },
     ],
   };
 }
 
-async function getPosition(address: string) {
-  // TODO: Query user position from Resupply contracts
+async function getPosition(address: string, pairAddress: string) {
+  const position = await getPositionLib(address, pairAddress);
   return {
     content: [
       {
         type: 'text',
-        text: JSON.stringify({
-          address,
-          collateral: 10000, // USDC
-          debt: 5000, // reUSD
-          healthFactor: 2.0, // 200% collateralization
-          liquidationPrice: 0.4, // LTV at liquidation
-          market: 'sDOLA',
-        }, null, 2),
+        text: JSON.stringify(position, null, 2),
       },
     ],
   };
 }
 
-async function calculateBorrow(
-  collateralAmount: number,
-  market: string,
-  targetLTV: number
-) {
-  const maxBorrow = collateralAmount * 0.8; // 80% max LTV
-  const safeBorrow = collateralAmount * targetLTV;
-  
+async function calculateBorrow(collateralAmount: number, targetLTV: number) {
+  const result = calculateBorrowLib(collateralAmount, targetLTV);
   return {
     content: [
       {
         type: 'text',
-        text: JSON.stringify({
-          collateralAmount,
-          market,
-          targetLTV,
-          recommendedBorrow: safeBorrow,
-          maxBorrow,
-          healthFactor: 1 / targetLTV,
-        }, null, 2),
+        text: JSON.stringify(result, null, 2),
       },
     ],
   };
@@ -242,53 +248,33 @@ async function calculateBorrow(
 
 async function simulateStrategy(
   collateralAmount: number,
-  market: string,
   borrowAmount: number,
-  reUSDDeployment: string
+  lendingAPY: number,
+  reUSDAPY: number
 ) {
-  // Placeholder APYs
-  const lendingAPY = 8.0;
-  const borrowAPY = 4.0;
-  const reUSDAPY = 6.0;
-  
-  const lendingYield = collateralAmount * (lendingAPY / 100);
-  const borrowCost = borrowAmount * (borrowAPY / 100);
-  const reUSDYield = borrowAmount * (reUSDAPY / 100);
-  const netYield = lendingYield - borrowCost + reUSDYield;
-  const netAPY = (netYield / collateralAmount) * 100;
-  
+  const result = simulateStrategyLib(collateralAmount, borrowAmount, lendingAPY, reUSDAPY);
   return {
     content: [
       {
         type: 'text',
-        text: JSON.stringify({
-          collateralAmount,
-          market,
-          borrowAmount,
-          reUSDDeployment,
-          lendingYield,
-          borrowCost,
-          reUSDYield,
-          netYield,
-          netAPY: `${netAPY.toFixed(2)}%`,
-        }, null, 2),
+        text: JSON.stringify(result, null, 2),
       },
     ],
   };
 }
 
-async function checkHealth(address: string) {
-  // TODO: Query position and check health factor
+async function checkHealth(address: string, pairAddress: string) {
+  const position = await getPositionLib(address, pairAddress);
+  const health = checkHealthLib(position);
   return {
     content: [
       {
         type: 'text',
         text: JSON.stringify({
           address,
-          healthFactor: 2.0,
-          status: 'SAFE',
-          liquidationRisk: 'LOW',
-          recommendation: 'Position is healthy. Can borrow more if desired.',
+          pairAddress,
+          position,
+          health,
         }, null, 2),
       },
     ],

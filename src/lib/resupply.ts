@@ -6,9 +6,9 @@
 
 import { type PublicClient, formatUnits, parseUnits } from 'viem';
 import { getPublicClient } from './viem.js';
-import { ADDRESSES } from '../../contracts/ADDRESSES.js';
-import RegistryABI from '../../contracts/abis/ResupplyRegistry.json' assert { type: 'json' };
-import PairABI from '../../contracts/abis/ResupplyPair.json' assert { type: 'json' };
+import { ADDRESSES } from '../contracts/ADDRESSES.js';
+import RegistryABI from '../contracts/abis/ResupplyRegistry.json' assert { type: 'json' };
+import PairABI from '../contracts/abis/ResupplyPair.json' assert { type: 'json' };
 
 export interface Market {
   name: string;
@@ -61,6 +61,7 @@ export async function getMarkets(client?: PublicClient): Promise<Market[]> {
     
     // Query each pair for details
     const markets: Market[] = [];
+    const failures: string[] = [];
     
     for (const pairAddress of Object.values(ADDRESSES.PAIRS)) {
       try {
@@ -111,8 +112,13 @@ export async function getMarkets(client?: PublicClient): Promise<Market[]> {
           available: true,
         });
       } catch (error) {
+        failures.push(pairAddress);
         console.warn(`Failed to fetch data for pair ${pairAddress}:`, error);
       }
+    }
+    
+    if (markets.length === 0 && failures.length > 0) {
+      throw new Error(`Failed to fetch any markets. ${failures.length} pairs failed. Check RPC connection.`);
     }
     
     return markets;
@@ -133,7 +139,7 @@ export async function getPosition(
   const publicClient = client || getPublicClient();
   
   try {
-    const [snapshot, name] = await Promise.all([
+    const [snapshot, accounting, name] = await Promise.all([
       publicClient.readContract({
         address: pairAddress as `0x${string}`,
         abi: PairABI,
@@ -143,19 +149,27 @@ export async function getPosition(
       publicClient.readContract({
         address: pairAddress as `0x${string}`,
         abi: PairABI,
+        functionName: 'getPairAccounting',
+      }),
+      publicClient.readContract({
+        address: pairAddress as `0x${string}`,
+        abi: PairABI,
         functionName: 'name',
       }),
     ]);
     
     const [borrowShares, collateralBalance] = snapshot as [bigint, bigint];
+    const [, totalBorrowAmount, totalBorrowShares] = accounting as [bigint, bigint, bigint, bigint];
     
-    // For now, assume 1:1 for shares (need total shares to calculate exact debt)
-    const debt = borrowShares; // Simplified
+    // Correct debt calculation: shares * totalBorrowAmount / totalBorrowShares
+    const debt = totalBorrowShares > 0n
+      ? (borrowShares * totalBorrowAmount) / totalBorrowShares
+      : 0n;
     
     const collateralUSD = Number(formatUnits(collateralBalance, 18));
     const debtUSD = Number(formatUnits(debt, 18));
-    const ltv = debtUSD / collateralUSD;
-    const healthFactor = collateralUSD / (debtUSD || 1);
+    const ltv = collateralUSD > 0 ? debtUSD / collateralUSD : 0;
+    const healthFactor = debtUSD > 0 ? collateralUSD / debtUSD : 999;
     
     return {
       address: userAddress,

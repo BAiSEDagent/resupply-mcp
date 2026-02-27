@@ -1,0 +1,86 @@
+[
+    {
+        "inputs": [{ "name": "_address", "type": "address" }],
+        "name": "getUserSnapshot",
+        "outputs": [
+            { "name": "_borrowShares", "type": "uint256" },
+            { "name": "_collateralBalance", "type": "uint256" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getPairAccounting",
+        "outputs": [
+            { "name": "_claimableFees", "type": "uint256" },
+            { "name": "_totalBorrowAmount", "type": "uint256" },
+            { "name": "_totalBorrowShares", "type": "uint256" },
+            { "name": "_totalCollateral", "type": "uint256" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "currentRateInfo",
+        "outputs": [
+            { "name": "lastBlock", "type": "uint64" },
+            { "name": "feeToProtocolRate", "type": "uint64" },
+            { "name": "lastTimestamp", "type": "uint64" },
+            { "name": "ratePerSec", "type": "uint64" },
+            { "name": "fullUtilizationRate", "type": "uint64" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "name",
+        "outputs": [{ "type": "string" }],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "asset",
+        "outputs": [{ "type": "address" }],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "collateral",
+        "outputs": [{ "type": "address" }],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{ "name": "_collateralAmount", "type": "uint256" }],
+        "name": "addCollateral",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{ "name": "_borrowAmount", "type": "uint256" }, { "name": "_receiver", "type": "address" }],
+        "name": "borrowAsset",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{ "name": "_shares", "type": "uint256" }, { "name": "_receiver", "type": "address" }],
+        "name": "repayAsset",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{ "name": "_collateralAmount", "type": "uint256" }, { "name": "_receiver", "type": "address" }],
+        "name": "removeCollateral",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+]
