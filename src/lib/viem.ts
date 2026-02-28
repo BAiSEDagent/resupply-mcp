@@ -1,39 +1,25 @@
 /**
- * Viem client setup for Ethereum mainnet
+ * Viem Public Client
  */
 
-import { createPublicClient, createWalletClient, http, type PublicClient, type WalletClient } from 'viem';
+import { createPublicClient, http } from 'viem';
 import { mainnet } from 'viem/chains';
-import { privateKeyToAccount } from 'viem/accounts';
-import dotenv from 'dotenv';
+import { getEnv } from './env.js';
 
-dotenv.config();
+let cachedClient: ReturnType<typeof createPublicClient> | null = null;
 
-// Public client (read-only)
-export function getPublicClient(): PublicClient {
-  const rpcUrl = process.env.ETHEREUM_RPC_URL || 'https://eth.llamarpc.com';
+/**
+ * Get configured public client (cached singleton)
+ */
+export function getPublicClient() {
+  if (cachedClient) return cachedClient;
   
-  return createPublicClient({
+  const env = getEnv();
+  
+  cachedClient = createPublicClient({
     chain: mainnet,
-    transport: http(rpcUrl),
+    transport: http(env.RPC_URL),
   });
-}
-
-// Wallet client (for transactions)
-export function getWalletClient(): WalletClient | null {
-  const privateKey = process.env.PRIVATE_KEY;
   
-  if (!privateKey) {
-    console.warn('No PRIVATE_KEY found. Wallet client not available.');
-    return null;
-  }
-  
-  const account = privateKeyToAccount(privateKey as `0x${string}`);
-  const rpcUrl = process.env.ETHEREUM_RPC_URL || 'https://eth.llamarpc.com';
-  
-  return createWalletClient({
-    account,
-    chain: mainnet,
-    transport: http(rpcUrl),
-  });
+  return cachedClient;
 }

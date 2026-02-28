@@ -1,17 +1,14 @@
 /**
  * Resupply Protocol Integration
  * 
- * Real contract interactions via viem
+ * Real contract interactions via viem + Etherscan-fetched ABIs
  */
 
-import { type PublicClient, formatUnits, parseUnits } from 'viem';
-import { createRequire } from 'node:module';
+import { type PublicClient, type Abi, formatUnits } from 'viem';
 import { getPublicClient } from './viem.js';
 import { ADDRESSES } from '../contracts/ADDRESSES.js';
-
-const require = createRequire(import.meta.url);
-const RegistryABI = require('../contracts/abis/ResupplyRegistry.json');
-const PairABI = require('../contracts/abis/ResupplyPair.json');
+import { fetchAbi } from './abi-fetcher.js';
+import { getEnv } from './env.js';
 
 export interface Market {
   name: string;
@@ -48,6 +45,26 @@ export interface SimulationResult {
   netAPY: number;
 }
 
+// ABI cache (fetch once, reuse)
+const abiCache = new Map<string, Abi>();
+
+/**
+ * Get ABI for a contract (cached)
+ */
+async function getAbi(address: string): Promise<Abi> {
+  const key = address.toLowerCase();
+  
+  if (abiCache.has(key)) {
+    return abiCache.get(key)!;
+  }
+  
+  const env = getEnv();
+  const abi = await fetchAbi({ address, apiKey: env.ETHERSCAN_API_KEY });
+  abiCache.set(key, abi);
+  
+  return abi;
+}
+
 /**
  * Get all available Resupply markets
  */
@@ -55,10 +72,20 @@ export async function getMarkets(client?: PublicClient): Promise<Market[]> {
   const publicClient = client || getPublicClient();
   
   try {
+    // Fetch Registry ABI
+    const registryAbi = await getAbi(ADDRESSES.REGISTRY);
+    
+    // Get global debt token (reUSD) from Registry
+    const debtTokenAddress = await publicClient.readContract({
+      address: ADDRESSES.REGISTRY as `0x${string}`,
+      abi: registryAbi,
+      functionName: 'token',
+    }) as string;
+    
     // Query Registry for all pairs
     const pairAddresses = await publicClient.readContract({
       address: ADDRESSES.REGISTRY as `0x${string}`,
-      abi: RegistryABI,
+      abi: registryAbi,
       functionName: 'getAllPairAddresses',
     }) as `0x${string}`[];
     
@@ -68,37 +95,37 @@ export async function getMarkets(client?: PublicClient): Promise<Market[]> {
     
     for (const pairAddress of Object.values(ADDRESSES.PAIRS)) {
       try {
-        const [name, asset, collateral, rateInfo, accounting] = await Promise.all([
+        // Fetch Pair ABI from Etherscan
+        const pairAbi = await getAbi(pairAddress);
+        
+        const [name, collateral, rateInfo, accounting] = await Promise.all([
           publicClient.readContract({
             address: pairAddress as `0x${string}`,
-            abi: PairABI,
+            abi: pairAbi,
             functionName: 'name',
           }),
           publicClient.readContract({
             address: pairAddress as `0x${string}`,
-            abi: PairABI,
-            functionName: 'asset',
-          }),
-          publicClient.readContract({
-            address: pairAddress as `0x${string}`,
-            abi: PairABI,
+            abi: pairAbi,
             functionName: 'collateral',
           }),
           publicClient.readContract({
             address: pairAddress as `0x${string}`,
-            abi: PairABI,
+            abi: pairAbi,
             functionName: 'currentRateInfo',
           }),
           publicClient.readContract({
             address: pairAddress as `0x${string}`,
-            abi: PairABI,
+            abi: pairAbi,
             functionName: 'getPairAccounting',
           }),
         ]);
         
         const marketName = (name as string).replace('Resupply ', '');
-        const ratePerSec = (rateInfo as any[])[3];
-        const totalCollateral = (accounting as any[])[3];
+        
+        // FIX M-2: Correct index (ratePerSec is index 1, not 3)
+        const [lastTimestamp, ratePerSec, lastShares] = rateInfo as [bigint, bigint, bigint];
+        const [claimableFees, totalBorrowAmount, totalBorrowShares, totalCollateral] = accounting as [bigint, bigint, bigint, bigint];
         
         // Convert rate per second to APY
         const borrowAPY = calculateAPYFromRate(Number(ratePerSec));
@@ -108,10 +135,10 @@ export async function getMarkets(client?: PublicClient): Promise<Market[]> {
           name: marketName,
           address: pairAddress,
           collateral: collateral as string,
-          asset: asset as string,
+          asset: debtTokenAddress, // All pairs use same debt token (reUSD)
           lendingAPY,
           borrowAPY,
-          tvl: formatUnits(totalCollateral as bigint, 18),
+          tvl: formatUnits(totalCollateral, 18),
           available: true,
         });
       } catch (error) {
@@ -142,21 +169,24 @@ export async function getPosition(
   const publicClient = client || getPublicClient();
   
   try {
+    // Fetch Pair ABI
+    const pairAbi = await getAbi(pairAddress);
+    
     const [snapshot, accounting, name] = await Promise.all([
       publicClient.readContract({
         address: pairAddress as `0x${string}`,
-        abi: PairABI,
+        abi: pairAbi,
         functionName: 'getUserSnapshot',
         args: [userAddress],
       }),
       publicClient.readContract({
         address: pairAddress as `0x${string}`,
-        abi: PairABI,
+        abi: pairAbi,
         functionName: 'getPairAccounting',
       }),
       publicClient.readContract({
         address: pairAddress as `0x${string}`,
-        abi: PairABI,
+        abi: pairAbi,
         functionName: 'name',
       }),
     ]);

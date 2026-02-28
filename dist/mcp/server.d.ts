@@ -4,6 +4,8 @@
  *
  * Exposes Resupply.fi operations via Model Context Protocol.
  *
+ * Pattern: PATTERN_TS_MCP_SERVER (canonical SDK usage)
+ *
  * Tools:
  * - resupply_get_markets: List available lending markets
  * - resupply_get_position: Check user position (collateral, debt, health)

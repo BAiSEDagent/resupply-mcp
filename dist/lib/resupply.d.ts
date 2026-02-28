@@ -1,7 +1,7 @@
 /**
  * Resupply Protocol Integration
  *
- * Real contract interactions via viem
+ * Real contract interactions via viem + Etherscan-fetched ABIs
  */
 import { type PublicClient } from 'viem';
 export interface Market {
